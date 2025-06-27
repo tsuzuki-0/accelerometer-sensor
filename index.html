@@ -1,80 +1,32 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-    <title>加速度データ</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f4f4f4;
-            color: #333;
-        }
-        h1, h2, h3 {
-            color: #0056b3;
-        }
-        button {
-            padding: 10px 15px;
-            margin: 5px;
-            border: none;
-            border-radius: 5px;
-            background-color: #007bff;
-            color: white;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        p {
-            margin: 5px 0;
-        }
-        textarea {
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 10px;
-            font-family: monospace;
-            white-space: pre;
-            overflow: auto;
-        }
-        .data-section {
-            background-color: white;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-    </style>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 </head>
 
 <body>
 
     <h1>加速度データ</h1>
-    <div class="data-section">
-        <button onclick="requestMotionPermission();">許可を得てセンシングを開始</button>
-        <button onclick="stopDeviceMotion();">停止</button>
-    </div>
+      <button onclick="requestMotionPermission();">許可を得てセンシングを開始</button>
+      <button onclick="stopDeviceMotion();">停止</button>
 
-    <div class="data-section">
-        <h2>加速度</h2>
+      <h2>加速度</h2>
         <p> X: <span id="accel-x">0</span> </p>
         <p> Y: <span id="accel-y">0</span> </p>
         <p> Z: <span id="accel-z">0</span> </p>
-    </div>
 
-    <div class="data-section">
-        <h3>加速度統計</h3>
+      <h3>加速度統計</h3>
         <p>X - 最大値: <span id="accel-x-max">0</span>, 最小値: <span id="accel-x-min">0</span>, 平均: <span id="accel-x-avg">0</span>, 分散: <span id="accel-x-var">0</span></p>
         <p>Y - 最大値: <span id="accel-y-max">0</span>, 最小値: <span id="accel-y-min">0</span>, 平均: <span id="accel-y-avg">0</span>, 分散: <span id="accel-y-var">0</span></p>
         <p>Z - 最大値: <span id="accel-z-max">0</span>, 最小値: <span id="accel-z-min">0</span>, 平均: <span id="accel-z-avg">0</span>, 分散: <span id="accel-z-var">0</span></p>
-    </div>
 
-    <div class="data-section">
-        <h2>加速度のCSVデータ</h2>
-        <textarea id="acc-csv" style="width:100%;height:200px;"></textarea>
-        <button onclick="downloadCSV('accel_data.csv', 'acc-csv');">CSVダウンロード</button>
-    </div>
+      <h2>合計加速度</h2>
+        <p> 合計加速度: <span id="accel-total">0</span> </p>
+      <h3>合計加速度統計</h3>
+        <p>合計 - 最大値: <span id="accel-total-max">0</span>, 最小値: <span id="accel-total-min">0</span>, 平均: <span id="accel-total-avg">0</span>, 分散: <span id="accel-total-var">0</span></p>
+
+      <h2>加速度のCSVデータ</h2>
+    <textarea id="acc-csv" style="width:300px;height:300px;"></textarea><br>
+    <button onclick="downloadCSV('accel_data.csv', 'acc-csv');">CSVダウンロード</button>
 
 <script type="text/javascript">
 alert("サンプルページ4へようこそ！");
@@ -84,6 +36,7 @@ const ACCEL_BUFFER_SIZE = 100; // 直近100個のデータポイントを保存
 let accelXBuffer = [];
 let accelYBuffer = [];
 let accelZBuffer = [];
+let accelTotalBuffer = []; // 合計加速度用のバッファを追加
 
 //////////////////////////////////////////////////////
 // ブラウザからセンサーアクセス許可を得る関数
@@ -101,6 +54,7 @@ function requestMotionPermission(){
                 accelXBuffer = [];
                 accelYBuffer = [];
                 accelZBuffer = [];
+                accelTotalBuffer = []; // 合計加速度バッファもクリア
                 $('#acc-csv').val(''); // CSV表示エリアもクリア
             } else {
                 // 許可を得られなかった場合などの処理
@@ -117,6 +71,7 @@ function requestMotionPermission(){
         accelXBuffer = [];
         accelYBuffer = [];
         accelZBuffer = [];
+        accelTotalBuffer = []; // 合計加速度バッファもクリア
         $('#acc-csv').val(''); // CSV表示エリアもクリア
     }
 }
@@ -191,6 +146,26 @@ function handleAcceleration(ev){
     $('#accel-z-avg').text(statsZ.avg);
     $('#accel-z-var').text(statsZ.var);
 
+    // 合計加速度を計算して表示
+    const totalAccel = Math.sqrt(
+        Math.pow(ev.acceleration.x, 2) +
+        Math.pow(ev.acceleration.y, 2) +
+        Math.pow(ev.acceleration.z, 2)
+    );
+    $('#accel-total').text(totalAccel.toFixed(3)); // ここは変更なし
+
+    // 合計加速度をバッファに保存
+    accelTotalBuffer.push(totalAccel);
+    if (accelTotalBuffer.length > ACCEL_BUFFER_SIZE) accelTotalBuffer.shift();
+
+    // 合計加速度の統計情報を計算して表示
+    const statsTotal = calculateStatistics(accelTotalBuffer);
+    $('#accel-total-max').text(statsTotal.max);
+    $('#accel-total-min').text(statsTotal.min);
+    $('#accel-total-avg').text(statsTotal.avg);
+    $('#accel-total-var').text(statsTotal.var);
+
+
     var e_time = new Date();
     // CSVヘッダー（初回のみ）
     if ($('#acc-csv').val() === '') {
@@ -220,6 +195,7 @@ function downloadCSV(filename, elementId) {
 }
 
 </script>
+---
 <br>
 <h1>レポート</h1>
 <p><b>氏名:</b> </p>
