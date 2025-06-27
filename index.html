@@ -1,25 +1,80 @@
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-  <script type="text/javascript" src="./4_accel-mag-csv_files/jquery.min.js"></script>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <title>加速度データ</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+        h1, h2, h3 {
+            color: #0056b3;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        p {
+            margin: 5px 0;
+        }
+        textarea {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+            white-space: pre;
+            overflow: auto;
+        }
+        .data-section {
+            background-color: white;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+    </style>
 </head>
 
 <body>
 
-  <h1>加速度データ</h1>
-    <button onclick="requestMotionPermission();">許可を得てセンシングを開始</button>
-    <button onclick="stopDeviceMotion();">停止</button>
+    <h1>加速度データ</h1>
+    <div class="data-section">
+        <button onclick="requestMotionPermission();">許可を得てセンシングを開始</button>
+        <button onclick="stopDeviceMotion();">停止</button>
+    </div>
 
-    <h2>加速度</h2>
-      <p> X: <span id="accel-x">0</span> </p>
-      <p> Y: <span id="accel-y">0</span> </p>
-      <p> Z: <span id="accel-z">0</span> </p>
+    <div class="data-section">
+        <h2>加速度</h2>
+        <p> X: <span id="accel-x">0</span> </p>
+        <p> Y: <span id="accel-y">0</span> </p>
+        <p> Z: <span id="accel-z">0</span> </p>
+    </div>
 
-    <h3>加速度統計</h3>
-      <p>X - 最大値: <span id="accel-x-max">0</span>, 最小値: <span id="accel-x-min">0</span>, 平均: <span id="accel-x-avg">0</span>, 分散: <span id="accel-x-var">0</span></p>
-      <p>Y - 最大値: <span id="accel-y-max">0</span>, 最小値: <span id="accel-y-min">0</span>, 平均: <span id="accel-y-avg">0</span>, 分散: <span id="accel-y-var">0</span></p>
-      <p>Z - 最大値: <span id="accel-z-max">0</span>, 最小値: <span id="accel-z-min">0</span>, 平均: <span id="accel-z-avg">0</span>, 分散: <span id="accel-z-var">0</span></p>
+    <div class="data-section">
+        <h3>加速度統計</h3>
+        <p>X - 最大値: <span id="accel-x-max">0</span>, 最小値: <span id="accel-x-min">0</span>, 平均: <span id="accel-x-avg">0</span>, 分散: <span id="accel-x-var">0</span></p>
+        <p>Y - 最大値: <span id="accel-y-max">0</span>, 最小値: <span id="accel-y-min">0</span>, 平均: <span id="accel-y-avg">0</span>, 分散: <span id="accel-y-var">0</span></p>
+        <p>Z - 最大値: <span id="accel-z-max">0</span>, 最小値: <span id="accel-z-min">0</span>, 平均: <span id="accel-z-avg">0</span>, 分散: <span id="accel-z-var">0</span></p>
+    </div>
 
-    <h2>加速度のCSVデータ</h2>
-<textarea id="acc-csv" style="width:300px;height:300px;"></textarea>
+    <div class="data-section">
+        <h2>加速度のCSVデータ</h2>
+        <textarea id="acc-csv" style="width:100%;height:200px;"></textarea>
+        <button onclick="downloadCSV('accel_data.csv', 'acc-csv');">CSVダウンロード</button>
+    </div>
 
 <script type="text/javascript">
 alert("サンプルページ4へようこそ！");
@@ -34,39 +89,40 @@ let accelZBuffer = [];
 // ブラウザからセンサーアクセス許可を得る関数
 //////////////////////////////////////////////////////
 function requestMotionPermission(){
-if ( DeviceMotionEvent &&
-     typeof DeviceMotionEvent.requestPermission === 'function' ){
-    // iOS 13+ の Safari
-    // 許可を取得
-    DeviceMotionEvent.requestPermission().then(permissionState => {
-  if (permissionState === 'granted') {
-            // 許可を得られた場合、devicemotionをイベントリスナーに追加
-      window.addEventListener("devicemotion", handleAcceleration, false);
-      // 開始時にバッファをクリア
-      accelXBuffer = [];
-      accelYBuffer = [];
-      accelZBuffer = [];
-  } else {
-            // 許可を得られなかった場合などの処理
-      console.log("許可が得られませんでした！");
-      alert("許可が得られませんでした！");
-  }
-    }).catch(console.error) // https通信でない場合などで許可を取得できなかった場合
+    if ( DeviceMotionEvent &&
+         typeof DeviceMotionEvent.requestPermission === 'function' ){
+        // iOS 13+ の Safari
+        // 許可を取得
+        DeviceMotionEvent.requestPermission().then(permissionState => {
+            if (permissionState === 'granted') {
+                // 許可を得られた場合、devicemotionをイベントリスナーに追加
+                window.addEventListener("devicemotion", handleAcceleration, false);
+                // 開始時にバッファをクリア
+                accelXBuffer = [];
+                accelYBuffer = [];
+                accelZBuffer = [];
+                $('#acc-csv').val(''); // CSV表示エリアもクリア
+            } else {
+                // 許可を得られなかった場合などの処理
+                console.log("許可が得られませんでした！");
+                alert("許可が得られませんでした！");
+            }
+        }).catch(console.error) // https通信でない場合などで許可を取得できなかった場合
 
-} else {
-    // その他のデバイス
-    console.log("その他のデバイスを検出しました。リスナーを追加します...");
-    window.addEventListener("devicemotion", handleAcceleration, false);
-    // 開始時にバッファをクリア
-    accelXBuffer = [];
-    accelYBuffer = [];
-    accelZBuffer = [];
-}
-
+    } else {
+        // その他のデバイス
+        console.log("その他のデバイスを検出しました。リスナーを追加します...");
+        window.addEventListener("devicemotion", handleAcceleration, false);
+        // 開始時にバッファをクリア
+        accelXBuffer = [];
+        accelYBuffer = [];
+        accelZBuffer = [];
+        $('#acc-csv').val(''); // CSV表示エリアもクリア
+    }
 }
 
 function stopDeviceMotion(){
-  window.removeEventListener("devicemotion", handleAcceleration, false);
+    window.removeEventListener("devicemotion", handleAcceleration, false);
 }
 
 
@@ -74,25 +130,25 @@ function stopDeviceMotion(){
 // 統計計算ヘルパー関数
 ////////////////////////////////////////////////////////////////////
 function calculateStatistics(dataBuffer) {
-  if (dataBuffer.length === 0) {
-      return { max: 0, min: 0, avg: 0, var: 0 };
-  }
+    if (dataBuffer.length === 0) {
+        return { max: 0, min: 0, avg: 0, var: 0 };
+    }
 
-  const max = Math.max(...dataBuffer);
-  const min = Math.min(...dataBuffer);
-  const sum = dataBuffer.reduce((a, b) => a + b, 0);
-  const avg = sum / dataBuffer.length;
+    const max = Math.max(...dataBuffer);
+    const min = Math.min(...dataBuffer);
+    const sum = dataBuffer.reduce((a, b) => a + b, 0);
+    const avg = sum / dataBuffer.length;
 
-  // 分散を計算（母分散）
-  const squaredDifferences = dataBuffer.map(value => Math.pow(value - avg, 2));
-  const variance = squaredDifferences.reduce((a, b) => a + b, 0) / dataBuffer.length;
+    // 分散を計算（母分散）
+    const squaredDifferences = dataBuffer.map(value => Math.pow(value - avg, 2));
+    const variance = squaredDifferences.reduce((a, b) => a + b, 0) / dataBuffer.length;
 
-  return {
-      max: max.toFixed(3),
-      min: min.toFixed(3),
-      avg: avg.toFixed(3),
-      var: variance.toFixed(3)
-  };
+    return {
+        max: max.toFixed(3),
+        min: min.toFixed(3),
+        avg: avg.toFixed(3),
+        var: variance.toFixed(3)
+    };
 }
 
 
@@ -101,72 +157,69 @@ function calculateStatistics(dataBuffer) {
 //  - この関数は1秒間に約10〜50回呼び出されます
 ////////////////////////////////////////////////////////////////////
 function handleAcceleration(ev){
-  // 現在の加速度を表示
-  $('#accel-x').text( ev.acceleration.x.toFixed(3) );
-  $('#accel-y').text( ev.acceleration.y.toFixed(3) );
-  $('#accel-z').text( ev.acceleration.z.toFixed(3) );
+    // 現在の加速度を表示
+    $('#accel-x').text( ev.acceleration.x.toFixed(3) );
+    $('#accel-y').text( ev.acceleration.y.toFixed(3) );
+    $('#accel-z').text( ev.acceleration.z.toFixed(3) );
 
-  // データをバッファに保存
-  accelXBuffer.push(ev.acceleration.x);
-  accelYBuffer.push(ev.acceleration.y);
-  accelZBuffer.push(ev.acceleration.z);
+    // データをバッファに保存
+    accelXBuffer.push(ev.acceleration.x);
+    accelYBuffer.push(ev.acceleration.y);
+    accelZBuffer.push(ev.acceleration.z);
 
-  // バッファサイズを超えた場合、最も古いデータを削除
-  if (accelXBuffer.length > ACCEL_BUFFER_SIZE) accelXBuffer.shift();
-  if (accelYBuffer.length > ACCEL_BUFFER_SIZE) accelYBuffer.shift();
-  if (accelZBuffer.length > ACCEL_BUFFER_SIZE) accelZBuffer.shift();
+    // バッファサイズを超えた場合、最も古いデータを削除
+    if (accelXBuffer.length > ACCEL_BUFFER_SIZE) accelXBuffer.shift();
+    if (accelYBuffer.length > ACCEL_BUFFER_SIZE) accelYBuffer.shift();
+    if (accelZBuffer.length > ACCEL_BUFFER_SIZE) accelZBuffer.shift();
 
-  // X, Y, Zの統計情報を計算して表示
-  const statsX = calculateStatistics(accelXBuffer);
-  $('#accel-x-max').text(statsX.max);
-  $('#accel-x-min').text(statsX.min);
-  $('#accel-x-avg').text(statsX.avg);
-  $('#accel-x-var').text(statsX.var);
+    // X, Y, Zの統計情報を計算して表示
+    const statsX = calculateStatistics(accelXBuffer);
+    $('#accel-x-max').text(statsX.max);
+    $('#accel-x-min').text(statsX.min);
+    $('#accel-x-avg').text(statsX.avg);
+    $('#accel-x-var').text(statsX.var);
 
-  const statsY = calculateStatistics(accelYBuffer);
-  $('#accel-y-max').text(statsY.max);
-  $('#accel-y-min').text(statsY.min);
-  $('#accel-y-avg').text(statsY.avg);
-  $('#accel-y-var').text(statsY.var);
+    const statsY = calculateStatistics(accelYBuffer);
+    $('#accel-y-max').text(statsY.max);
+    $('#accel-y-min').text(statsY.min);
+    $('#accel-y-avg').text(statsY.avg);
+    $('#accel-y-var').text(statsY.var);
 
-  const statsZ = calculateStatistics(accelZBuffer);
-  $('#accel-z-max').text(statsZ.max);
-  $('#accel-z-min').text(statsZ.min);
-  $('#accel-z-avg').text(statsZ.avg);
-  $('#accel-z-var').text(statsZ.var);
+    const statsZ = calculateStatistics(accelZBuffer);
+    $('#accel-z-max').text(statsZ.max);
+    $('#accel-z-min').text(statsZ.min);
+    $('#accel-z-avg').text(statsZ.avg);
+    $('#accel-z-var').text(statsZ.var);
 
-  // 合計加速度（マグニチュード）は不要なため削除
-  // const totalAccel = Math.sqrt(
-  //     Math.pow(ev.acceleration.x, 2) +
-  //     Math.pow(ev.acceleration.y, 2) +
-  //     Math.pow(ev.acceleration.z, 2)
-  // );
-  // $('#accel-total').text(totalAccel.toFixed(3));
-  // accelTotalBuffer.push(totalAccel);
-  // if (accelTotalBuffer.length > ACCEL_BUFFER_SIZE) accelTotalBuffer.shift();
-  // const statsTotal = calculateStatistics(accelTotalBuffer);
-  // $('#accel-total-max').text(statsTotal.max);
-  // $('#accel-total-min').text(statsTotal.min);
-  // $('#accel-total-avg').text(statsTotal.avg);
-  // $('#accel-total-var').text(statsTotal.var);
-
-
-  var e_time = new Date();
-  $('#acc-csv').append(e_time.getTime() + ",acc ," + ev.acceleration.x.toFixed(3) + "," + ev.acceleration.y.toFixed(3) + "," + ev.acceleration.z.toFixed(3) + "\n");
-
-  // 加速度（重力含む）は不要なため削除
-  // $('#accel-g-x').text( ev.accelerationIncludingGravity.x.toFixed(3) );
-  // $('#accel-g-y').text( ev.accelerationIncludingGravity.y.toFixed(3) );
-  // $('#accel-g-z').text( ev.accelerationIncludingGravity.z.toFixed(3) );
+    var e_time = new Date();
+    // CSVヘッダー（初回のみ）
+    if ($('#acc-csv').val() === '') {
+        $('#acc-csv').append("timestamp,type,x,y,z\n");
+    }
+    $('#acc-csv').append(e_time.getTime() + ",acc ," + ev.acceleration.x.toFixed(3) + "," + ev.acceleration.y.toFixed(3) + "," + ev.acceleration.z.toFixed(3) + "\n");
 }
 
-// 磁力計と回転速度の関数は不要なため削除
-// function requestOrientationPermission(){}
-// function stopDeviceOrientation(){}
-// function handleOrientation(){}
+////////////////////////////////////////////////////////////////////
+// CSVダウンロード関数
+////////////////////////////////////////////////////////////////////
+function downloadCSV(filename, elementId) {
+    const csvContent = document.getElementById(elementId).value;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    // ダウンロードリンクを作成
+    const link = document.createElement("a");
+    if (link.download !== undefined) { // HTML5ダウンロード属性をサポートしているか
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+}
 
 </script>
----
 <br>
 <h1>レポート</h1>
 <p><b>氏名:</b> </p>
@@ -176,22 +229,22 @@ function handleAcceleration(ev){
 <p><b>CNSメールアドレス:</b> </p>
 
 <h2>収集した行動データ</h2>
-  <p><b>選定した理由:</b> </p>
-  <p><b>収集についての詳細:</b> </p>
-  <p><b>工夫した点・困難だった点:</b> </p>
+    <p><b>選定した理由:</b> </p>
+    <p><b>収集についての詳細:</b> </p>
+    <p><b>工夫した点・困難だった点:</b> </p>
 
 <h2>特徴量</h2>
-  <p><b>選定した理由:</b> </p>
-  <p><b>追加した特徴量について:</b> </p>
-  <p><b>工夫した点・困難だった点:</b> </p>
+    <p><b>選定した理由:</b> </p>
+    <p><b>追加した特徴量について:</b> </p>
+    <p><b>工夫した点・困難だった点:</b> </p>
 
 <h2>機械学習モデル</h2>
-  <p><b>採用したアルゴリズムや学習結果の詳細:</b> </p>
-  <p><b>工夫した点・困難だった点:</b> </p>
+    <p><b>採用したアルゴリズムや学習結果の詳細:</b> </p>
+    <p><b>工夫した点・困難だった点:</b> </p>
 
 <h2>実機に移植しての性能評価</h2>
-  <p><b>評価尺度について:</b> </p>
-  <p><b>評価結果:</b> </p>
-  <p><b>工夫した点・困難だった点:</b> </p>
+    <p><b>評価尺度について:</b> </p>
+    <p><b>評価結果:</b> </p>
+    <p><b>工夫した点・困難だった点:</b> </p>
 
 </body></html>
