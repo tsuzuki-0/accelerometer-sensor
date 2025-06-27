@@ -1,257 +1,100 @@
-<html>
-<head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-</head>
-
-<body>
-
-    <h1>加速度データ</h1>
-    <button onclick="requestMotionPermission();">許可を得てセンシングを開始</button>
-    <button onclick="stopDeviceMotion();">停止</button>
-
-    <h2>加速度</h2>
-    <p> X: <span id="accel-x">0</span> </p>
-    <p> Y: <span id="accel-y">0</span> </p>
-    <p> Z: <span id="accel-z">0</span> </p>
-
-    <h3>加速度統計 (リアルタイムバッファ)</h3>
-    <p>X - 最大値: <span id="accel-x-max">0</span>, 最小値: <span id="accel-x-min">0</span>, 平均: <span id="accel-x-avg">0</span>, 分散: <span id="accel-x-var">0</span></p>
-    <p>Y - 最大値: <span id="accel-y-max">0</span>, 最小値: <span id="accel-y-min">0</span>, 平均: <span id="accel-y-avg">0</span>, 分散: <span id="accel-y-var">0</span></p>
-    <p>Z - 最大値: <span id="accel-z-max">0</span>, 最小値: <span id="accel-z-min">0</span>, 平均: <span id="accel-z-avg">0</span>, 分散: <span id="accel-z-var">0</span></p>
-
-    <h2>合計加速度</h2>
-    <p> 合計加速度: <span id="accel-total">0</span> </p>
-    <h3>合計加速度統計 (リアルタイムバッファ)</h3>
-    <p>合計 - 最大値: <span id="accel-total-max">0</span>, 最小値: <span id="accel-total-min">0</span>, 平均: <span id="accel-total-avg">0</span>, 分散: <span id="accel-total-var">0</span></p>
-
-    <h2>分類結果</h2>
-    <p>現在の活動: <span id="classification-result">null</span></p>
-
-    <h2>加速度のCSVデータ</h2>
-    <textarea id="acc-csv" style="width:300px;height:300px;"></textarea><br>
-    <button onclick="downloadCSV('accel_data.csv', 'acc-csv');">CSVダウンロード</button>
-
-<script type="text/javascript">
-alert("サンプルページ4へようこそ！");
-
-const ACCEL_BUFFER_SIZE = 50;
-let accelXBuffer = [];
-let accelYBuffer = [];
-let accelZBuffer = [];
-let accelTotalBuffer = [];
-
-function requestMotionPermission(){
-    if ( DeviceMotionEvent &&
-          typeof DeviceMotionEvent.requestPermission === 'function' ){
-        DeviceMotionEvent.requestPermission().then(permissionState => {
-            if (permissionState === 'granted') {
-                window.addEventListener("devicemotion", handleAcceleration, false);
-                resetUIAndBuffers();
-            } else {
-                console.log("許可が得られませんでした！");
-                alert("許可が得られませんでした！");
-            }
-        }).catch(console.error)
-    } else {
-        console.log("その他のデバイスを検出しました。リスナーを追加します...");
-        window.addEventListener("devicemotion", handleAcceleration, false);
-        resetUIAndBuffers();
-    }
-}
-
-function stopDeviceMotion(){
-    window.removeEventListener("devicemotion", handleAcceleration, false);
-    console.log("センシングを停止しました。");
-}
-
-function resetUIAndBuffers() {
-    accelXBuffer = [];
-    accelYBuffer = [];
-    accelZBuffer = [];
-    accelTotalBuffer = [];
-    $('#acc-csv').val('timestamp,type,x,y,z,total_accel,predicted_activity\n');
-    $('#classification-result').text('null');
-    $('#accel-x-max').text(0); $('#accel-x-min').text(0); $('#accel-x-avg').text(0); $('#accel-x-var').text(0);
-    $('#accel-y-max').text(0); $('#accel-y-min').text(0); $('#accel-y-avg').text(0); $('#accel-y-var').text(0);
-    $('#accel-z-max').text(0); $('#accel-z-min').text(0); $('#accel-z-avg').text(0); $('#accel-z-var').text(0);
-    $('#accel-total-max').text(0); $('#accel-total-min').text(0); $('#accel-total-avg').text(0); $('#accel-total-var').text(0);
-    console.log("UIとバッファをリセットしました。");
-}
-
-
-function calculateStatistics(dataBuffer) {
-    if (dataBuffer.length === 0) {
-        return { max: 0, min: 0, avg: 0, var: 0 };
-    }
-
-    const max = Math.max(...dataBuffer);
-    const min = Math.min(...dataBuffer);
-    const sum = dataBuffer.reduce((a, b) => a + b, 0);
-    const avg = sum / dataBuffer.length;
-
-    // 分散を計算（標本分散 - NumPyのddof=1に相当）
-    // まず squaredDifferences を計算
-    const squaredDifferences = dataBuffer.map(value => Math.pow(value - avg, 2));
-    const variance = dataBuffer.length > 1 ? squaredDifferences.reduce((a, b) => a + b, 0) / (dataBuffer.length - 1) : 0;
-    
-    return {
-        max: max.toFixed(3),
-        min: min.toFixed(3),
-        avg: avg.toFixed(3),
-        var: variance.toFixed(3)
-    };
-}
-
-
-function handleAcceleration(ev){
-    const currentX = ev.acceleration.x;
-    const currentY = ev.acceleration.y;
-    const currentZ = ev.acceleration.z;
-
-    $('#accel-x').text( currentX.toFixed(3) );
-    $('#accel-y').text( currentY.toFixed(3) );
-    $('#accel-z').text( currentZ.toFixed(3) );
-
-    const totalAccel = Math.sqrt(
-        Math.pow(currentX, 2) +
-        Math.pow(currentY, 2) +
-        Math.pow(currentZ, 2)
-    );
-    $('#accel-total').text(totalAccel.toFixed(3));
-
-    accelXBuffer.push(currentX);
-    accelYBuffer.push(currentY);
-    accelZBuffer.push(currentZ);
-    accelTotalBuffer.push(totalAccel);
-
-    if (accelXBuffer.length > ACCEL_BUFFER_SIZE) accelXBuffer.shift();
-    if (accelYBuffer.length > ACCEL_BUFFER_SIZE) accelYBuffer.shift();
-    if (accelZBuffer.length > ACCEL_BUFFER_SIZE) accelZBuffer.shift();
-    if (accelTotalBuffer.length > ACCEL_BUFFER_SIZE) accelTotalBuffer.shift();
-
-    const statsX = calculateStatistics(accelXBuffer);
-    $('#accel-x-max').text(statsX.max);
-    $('#accel-x-min').text(statsX.min);
-    $('#accel-x-avg').text(statsX.avg);
-    $('#accel-x-var').text(statsX.var);
-
-    const statsY = calculateStatistics(accelYBuffer);
-    $('#accel-y-max').text(statsY.max);
-    $('#accel-y-min').text(statsY.min);
-    $('#accel-y-avg').text(statsY.avg);
-    $('#accel-y-var').text(statsY.var);
-
-    const statsZ = calculateStatistics(accelZBuffer);
-    $('#accel-z-max').text(statsZ.max);
-    $('#accel-z-min').text(statsZ.min);
-    $('#accel-z-avg').text(statsZ.avg);
-    $('#accel-z-var').text(statsZ.var);
-
-    const statsTotal = calculateStatistics(accelTotalBuffer);
-    $('#accel-total-max').text(statsTotal.max);
-    $('#accel-total-min').text(statsTotal.min);
-    $('#accel-total-avg').text(statsTotal.avg);
-    $('#accel-total-var').text(statsTotal.var);
-
-    let classificationResult = "Waiting for data...";
-
-    if (accelTotalBuffer.length === ACCEL_BUFFER_SIZE) {
-        const current_x_avg = parseFloat(statsX.avg);
-        const current_y_avg = parseFloat(statsY.avg);
-        const current_z_avg = parseFloat(statsZ.avg);
-        const current_total_accel_avg = parseFloat(statsTotal.avg);
-        const current_total_accel_var = parseFloat(statsTotal.var);
-        const current_x_var = parseFloat(statsX.var);
-        const current_y_var = parseFloat(statsY.var);
-        const current_z_var = parseFloat(statsZ.var);
-
-
-        // --- 分類ロジックの調整 ---
-        // Pythonの決定木の可視化結果を参考に、より正確な分岐を試みます。
-        // 例えば、Pythonの決定木が `total_accel_var <= 0.2` で分岐し、
-        // その後 `y_avg <= 0.3` で分岐している、といった情報を活用します。
-
-        // standing (静止): total_accelの平均が低く、かつ分散も非常に低い
-        // Pythonの混同行列でstandingは完璧だったので、この条件は維持しつつ強化。
-        if (current_total_accel_avg < 0.98 && current_total_accel_var < 0.05) { // 閾値を少し厳しく調整
-            classificationResult = "standing";
-        }
-        // jumping (ジャンプ): total_accelの分散が非常に大きい、または平均が非常に大きい
-        // walkingと混同しやすいので、分散の閾値をより高くする、または他の特徴も組み合わせる
-        else if (current_total_accel_var > 0.6 || // 分散が非常に高い場合
-                 current_total_accel_avg > 2.0 ) { // 平均加速度も非常に高い場合
-            classificationResult = "jumping";
-        }
-        // walking (歩行): standingよりは動きがあり、jumpingよりは激しくない
-        // total_accelの平均が中程度で、分散も中程度
-        // ここが一番トリッキーな部分。jumpingと重ならないように調整。
-        else if (current_total_accel_avg >= 0.98 && current_total_accel_avg < 2.0 && // total_accel平均がstandingとjumpingの間
-                 current_total_accel_var >= 0.05 && current_total_accel_var < 0.6) { // total_accel分散もstandingとjumpingの間
-            classificationResult = "walking";
-        }
-        else {
-            classificationResult = "unknown (adjust rules)";
-        }
-        // --- 分類ロジックの調整ここまで ---
-    }
-    $('#classification-result').text(classificationResult);
-
-    var e_time = new Date();
-    const csv_line = e_time.getTime() + "," +
-                     "acc ," +
-                     currentX.toFixed(3) + "," +
-                     currentY.toFixed(3) + "," +
-                     currentZ.toFixed(3) + "," +
-                     totalAccel.toFixed(3) + "," +
-                     classificationResult + "\n";
-    $('#acc-csv').append(csv_line);
-}
-
-function downloadCSV(filename, elementId) {
-    const csvContent = document.getElementById(elementId).value;
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", filename);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    }
-}
-
-</script>
 ---
 <br>
 <h1>レポート</h1>
-<p><b>氏名:</b> </p>
-<p><b>学部:</b> </p>
-<p><b>学年:</b> </p>
-<p><b>学籍番号:</b> </p>
-<p><b>CNSメールアドレス:</b> </p>
+<p><b>氏名:</b> 都筑零</p>
+<p><b>学部:</b> 総合政策学部</p>
+<p><b>学年:</b> ３年</p>
+<p><b>学籍番号:</b> 72305268</p>
+<p><b>CNSメールアドレス:</b> s23526rt@sfc.keio.ac.jp</p>
+<p><b>ログイン名:</b> tsuzuki</p>
 
 <h2>収集した行動データ</h2>
-    <p><b>選定した理由:</b> </p>
-    <p><b>収集についての詳細:</b> </p>
-    <p><b>工夫した点・困難だった点:</b> </p>
+    <p><b>選定した理由:</b>
+        日常的な身体活動である「Standing (静止)」「Walking (歩行)」「Jumping (ジャンプ)」の3種類を選定。異なるレベルの加速度変化を持つため、機械学習による分類に適していると考えた。
+    </p>
+    <p><b>収集についての詳細:</b>
+        スマートフォン内蔵の加速度センサー（X, Y, Z軸）からデータを収集。各アクティビティを複数回実行し、時間的に連続したシーケンスとしてデータを取得、CSV形式で出力した。
+    </p>
+    <p><b>工夫した点・困難だった点:</b>
+        <ul>
+            <li><b>工夫した点:</b> 任意のタイミングでデータ収集を制御できるように開始・停止ボタンを実装。生データとリアルタイム統計量を同時に表示・記録できるようにした。</li>
+            <li><b>困難だった点:</b> デバイスの向きによる加速度値の変動、活動の境界が曖昧な点。</li>
+        </ul>
+    </p>
 
 <h2>特徴量</h2>
-    <p><b>選定した理由:</b> </p>
-    <p><b>追加した特徴量について:</b> </p>
-    <p><b>工夫した点・困難だった点:</b> </p>
+    <p><b>選定した理由:</b>
+        生データだけでは分類が困難なため、活動の「強さ」「安定性」「変動性」を示す統計量を選定。具体的には、一定の時間窓（直近50サンプル）におけるX, Y, Z軸および合計加速度の「最大値」「最小値」「平均値」「分散」を特徴量とした。
+    </p>
+    <p><b>追加した特徴量について:</b>
+        各軸加速度（X, Y, Z）と合計加速度 (`total_accel`) について、それぞれ以下の統計量を追加した。
+        <ul>
+            <li>最大値 (`_max`)</li>
+            <li>最小値 (`_min`)</li>
+            <li>平均値 (`_mean`)</li>
+            <li>分散 (`_var`)</li>
+        </ul>
+        これらの特徴量はPythonで計算され、元のデータに結合された。
+    </p>
+    <p><b>工夫した点・困難だった点:</b>
+        <ul>
+            <li><b>工夫した点:</b> リアルタイム統計量計算のために循環バッファを導入。分散計算はPythonのNumPyに合わせた方法を採用。</li>
+            <li><b>困難だった点:</b> 適切なバッファサイズ（ACCEL_BUFFER_SIZE）の決定。PythonとJavaScript間での特徴量計算ロジックの完全一致の難しさ。</li>
+        </ul>
+    </p>
 
 <h2>機械学習モデル</h2>
-    <p><b>採用したアルゴリズムや学習結果の詳細:</b> </p>
-    <p><b>工夫した点・困難だった点:</b> </p>
+    <p><b>採用したアルゴリズムや学習結果の詳細:</b>
+        活動分類には<b>決定木分類器 (Decision Tree Classifier)</b> を採用。`scikit-learn` を使用し、データセット（60サンプル）を訓練70%（42サンプル）、テスト30%（18サンプル）に分割して訓練。
+        <br>
+        <b>学習結果（テストセット18サンプルでの評価）:</b>
+        <ul>
+            <li><b>精度 (Accuracy):</b> 0.8333</li>
+        </ul>
+        <b>分類レポート:</b>
+        <pre>
+              precision    recall  f1-score   support
+
+     jumping       0.83      0.83      0.83         6
+    standing       0.86      1.00      0.92         6
+     walking       0.80      0.67      0.73         6
+
+    accuracy                           0.83        18
+   macro avg       0.83      0.83      0.83        18
+weighted avg       0.83      0.83      0.83        18
+        </pre>
+        <b>混同行列:</b>
+        <pre>
+          jumping  standing  walking
+jumping         5         0        1
+standing        0         6        0
+walking         1         1        4
+        </pre>
+        全体精度は約83%。`standing` は完璧に分類。`walking` は`jumping`や`standing`と一部誤分類が見られた。
+    </p>
+    <p><b>工夫した点・困難だった点:</b>
+        <ul>
+            <li><b>工夫した点:</b> データが小規模なため、`stratify`でクラス比率を維持して分割。過学習抑制のため`max_depth=5`を設定。</li>
+            <li><b>困難だった点:</b> PythonモデルをJavaScriptに直接移植できないため、<b>Pythonモデルの分析結果に基づいた簡易ルールベースの分類ロジックをJavaScriptで構築</b>。この手動調整は困難が伴った。</li>
+        </ul>
+    </p>
 
 <h2>実機に移植しての性能評価</h2>
-    <p><b>評価尺度について:</b> </p>
-    <p><b>評価結果:</b> </p>
-    <p><b>工夫した点・困難だった点:</b> </p>
-
-</body>
-</html>
+    <p><b>評価尺度について:</b>
+        リアルタイム分類の体感精度（目視）と、CSV記録データによる間接的な確認を行った。
+    </p>
+    <p><b>評価結果:</b>
+        <ul>
+            <li><b>Standing:</b> 非常に安定して分類された。</li>
+            <li><b>Jumping:</b> 比較的分類されるが、`walking`と誤分類される場合あり。</li>
+            <li><b>Walking:</b> `jumping`と誤分類されることが多い。歩行中の動きがジャンプのような大きな加速度変動として捉えられる傾向。</li>
+            <li><b>Unknown:</b> 定義ルール外の動きで表示された。</li>
+        </ul>
+        `standing`は良好だが、`walking`と`jumping`の分類に改善の余地がある。
+    </p>
+    <p><b>工夫した点・困難だった点:</b>
+        <ul>
+            <li><b>工夫した点:</b> リアルタイム表示で迅速なデバッグ・ルール調整。CSV記録で誤分類時のデータ分析を可能にした。</li>
+            <li><b>困難だった点:</b> 手動ルール調整の難しさ。デバイスセンサー特性とモデル訓練のギャップ。リアルタイム性と安定性のバランスを取る`ACCEL_BUFFER_SIZE`の調整。</li>
+        </ul>
+    </p>
