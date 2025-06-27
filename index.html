@@ -1,4 +1,279 @@
----
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>加速度データ解析と活動分類</title>
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; background-color: #f4f7f6; color: #333; }
+        h1, h2, h3 { color: #2c3e50; }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+        button:hover { background-color: #2980b9; }
+        textarea {
+            width: 90%;
+            max-width: 600px;
+            min-height: 200px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-family: 'Courier New', Courier, monospace;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: auto;
+        }
+        p { margin-bottom: 5px; }
+        ul { list-style-type: disc; margin-left: 20px; }
+        pre { background-color: #ecf0f1; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+
+<body>
+
+    <h1>加速度データ</h1>
+    <button onclick="requestMotionPermission();">許可を得てセンシングを開始</button>
+    <button onclick="stopDeviceMotion();">停止</button>
+
+    <h2>加速度</h2>
+    <p> X: <span id="accel-x">0</span> </p>
+    <p> Y: <span id="accel-y">0</span> </p>
+    <p> Z: <span id="accel-z">0</span> </p>
+
+    <h3>加速度統計 (リアルタイムバッファ)</h3>
+    <p>X - 最大値: <span id="accel-x-max">0</span>, 最小値: <span id="accel-x-min">0</span>, 平均: <span id="accel-x-avg">0</span>, 分散: <span id="accel-x-var">0</span></p>
+    <p>Y - 最大値: <span id="accel-y-max">0</span>, 最小値: <span id="accel-y-min">0</span>, 平均: <span id="accel-y-avg">0</span>, 分散: <span id="accel-y-var">0</span></p>
+    <p>Z - 最大値: <span id="accel-z-max">0</span>, 最小値: <span id="accel-z-min">0</span>, 平均: <span id="accel-z-avg">0</span>, 分散: <span id="accel-z-var">0</span></p>
+
+    <h2>合計加速度</h2>
+    <p> 合計加速度: <span id="accel-total">0</span> </p>
+    <h3>合計加速度統計 (リアルタイムバッファ)</h3>
+    <p>合計 - 最大値: <span id="accel-total-max">0</span>, 最小値: <span id="accel-total-min">0</span>, 平均: <span id="accel-total-avg">0</span>, 分散: <span id="accel-total-var">0</span></p>
+
+    <h2>分類結果</h2>
+    <p>現在の活動: <span id="classification-result">null</span></p>
+
+    <h2>加速度のCSVデータ</h2>
+    <textarea id="acc-csv" style="width:300px;height:300px;"></textarea><br>
+    <button onclick="downloadCSV('accel_data.csv', 'acc-csv');">CSVダウンロード</button>
+
+<script type="text/javascript">
+//alert("加速度データ解析と活動分類ページへようこそ！"); // 不要であればコメントアウト
+
+const ACCEL_BUFFER_SIZE = 50; // 直近の50サンプルで統計を計算
+let accelXBuffer = [];
+let accelYBuffer = [];
+let accelZBuffer = [];
+let accelTotalBuffer = [];
+
+//////////////////////////////////////////////////////
+// ブラウザからセンサーアクセス許可を得る関数
+//////////////////////////////////////////////////////
+function requestMotionPermission(){
+    if ( DeviceMotionEvent &&
+          typeof DeviceMotionEvent.requestPermission === 'function' ){
+        // iOS 13+ の Safari
+        DeviceMotionEvent.requestPermission().then(permissionState => {
+            if (permissionState === 'granted') {
+                window.addEventListener("devicemotion", handleAcceleration, false);
+                resetUIAndBuffers();
+            } else {
+                console.log("許可が得られませんでした！");
+                alert("許可が得られませんでした！");
+            }
+        }).catch(console.error)
+    } else {
+        // その他のデバイス
+        console.log("その他のデバイスを検出しました。リスナーを追加します...");
+        window.addEventListener("devicemotion", handleAcceleration, false);
+        resetUIAndBuffers();
+    }
+}
+
+function stopDeviceMotion(){
+    window.removeEventListener("devicemotion", handleAcceleration, false);
+    console.log("センシングを停止しました。");
+}
+
+function resetUIAndBuffers() {
+    accelXBuffer = [];
+    accelYBuffer = [];
+    accelZBuffer = [];
+    accelTotalBuffer = [];
+    // CSVヘッダーをここで初期化し、予測結果カラムも追加
+    $('#acc-csv').val('timestamp,type,x,y,z,total_accel,predicted_activity\n');
+    $('#classification-result').text('null');
+    $('#accel-x-max').text(0); $('#accel-x-min').text(0); $('#accel-x-avg').text(0); $('#accel-x-var').text(0);
+    $('#accel-y-max').text(0); $('#accel-y-min').text(0); $('#accel-y-avg').text(0); $('#accel-y-var').text(0);
+    $('#accel-z-max').text(0); $('#accel-z-min').text(0); $('#accel-z-avg').text(0); $('#accel-z-var').text(0);
+    $('#accel-total-max').text(0); $('#accel-total-min').text(0); $('#accel-total-avg').text(0); $('#accel-total-var').text(0);
+    console.log("UIとバッファをリセットしました。");
+}
+
+
+////////////////////////////////////////////////////////////////////
+// 統計計算ヘルパー関数
+////////////////////////////////////////////////////////////////////
+function calculateStatistics(dataBuffer) {
+    if (dataBuffer.length === 0) {
+        return { max: 0, min: 0, avg: 0, var: 0 };
+    }
+
+    const max = Math.max(...dataBuffer);
+    const min = Math.min(...dataBuffer);
+    const sum = dataBuffer.reduce((a, b) => a + b, 0);
+    const avg = sum / dataBuffer.length;
+
+    // 分散を計算（標本分散 - NumPyのddof=1に相当）
+    const squaredDifferences = dataBuffer.map(value => Math.pow(value - avg, 2));
+    const variance = dataBuffer.length > 1 ? squaredDifferences.reduce((a, b) => a + b, 0) / (dataBuffer.length - 1) : 0;
+    
+    return {
+        max: max.toFixed(3),
+        min: min.toFixed(3),
+        avg: avg.toFixed(3),
+        var: variance.toFixed(3)
+    };
+}
+
+
+////////////////////////////////////////////////////////////////////
+// 関数(1): 加速度データを処理する関数
+//  - この関数は1秒間に約10〜50回呼び出されます
+////////////////////////////////////////////////////////////////////
+function handleAcceleration(ev){
+    const currentX = ev.acceleration.x;
+    const currentY = ev.acceleration.y;
+    const currentZ = ev.acceleration.z;
+
+    $('#accel-x').text( currentX.toFixed(3) );
+    $('#accel-y').text( currentY.toFixed(3) );
+    $('#accel-z').text( currentZ.toFixed(3) );
+
+    const totalAccel = Math.sqrt(
+        Math.pow(currentX, 2) +
+        Math.pow(currentY, 2) +
+        Math.pow(currentZ, 2)
+    );
+    $('#accel-total').text(totalAccel.toFixed(3));
+
+    accelXBuffer.push(currentX);
+    accelYBuffer.push(currentY);
+    accelZBuffer.push(currentZ);
+    accelTotalBuffer.push(totalAccel);
+
+    if (accelXBuffer.length > ACCEL_BUFFER_SIZE) accelXBuffer.shift();
+    if (accelYBuffer.length > ACCEL_BUFFER_SIZE) accelYBuffer.shift();
+    if (accelZBuffer.length > ACCEL_BUFFER_SIZE) accelZBuffer.shift();
+    if (accelTotalBuffer.length > ACCEL_BUFFER_SIZE) accelTotalBuffer.shift();
+
+    const statsX = calculateStatistics(accelXBuffer);
+    $('#accel-x-max').text(statsX.max);
+    $('#accel-x-min').text(statsX.min);
+    $('#accel-x-avg').text(statsX.avg);
+    $('#accel-x-var').text(statsX.var);
+
+    const statsY = calculateStatistics(accelYBuffer);
+    $('#accel-y-max').text(statsY.max);
+    $('#accel-y-min').text(statsY.min);
+    $('#accel-y-avg').text(statsY.avg);
+    $('#accel-y-var').text(statsY.var);
+
+    const statsZ = calculateStatistics(accelZBuffer);
+    $('#accel-z-max').text(statsZ.max);
+    $('#accel-z-min').text(statsZ.min);
+    $('#accel-z-avg').text(statsZ.avg);
+    $('#accel-z-var').text(statsZ.var);
+
+    const statsTotal = calculateStatistics(accelTotalBuffer);
+    $('#accel-total-max').text(statsTotal.max);
+    $('#accel-total-min').text(statsTotal.min);
+    $('#accel-total-avg').text(statsTotal.avg);
+    $('#accel-total-var').text(statsTotal.var);
+
+    let classificationResult = "Waiting for data...";
+
+    if (accelTotalBuffer.length === ACCEL_BUFFER_SIZE) {
+        // 現在のリアルタイム統計量を数値に変換
+        const current_x_avg = parseFloat(statsX.avg);
+        const current_y_avg = parseFloat(statsY.avg);
+        const current_z_avg = parseFloat(statsZ.avg);
+        const current_total_accel_avg = parseFloat(statsTotal.avg);
+        const current_total_accel_var = parseFloat(statsTotal.var);
+        const current_x_var = parseFloat(statsX.var);
+        const current_y_var = parseFloat(statsY.var);
+        const current_z_var = parseFloat(statsZ.var);
+
+
+        // --- 分類ロジックの調整 ---
+        // Pythonの決定木の可視化結果を参考に、より正確な分岐を試みます。
+        // これらの閾値は、あなたの訓練データと決定木の可視化結果を参考に調整してください。
+        // Standing: total_accelの平均と分散が非常に低い
+        if (current_total_accel_avg < 0.98 && current_total_accel_var < 0.05) {
+            classificationResult = "standing";
+        }
+        // Jumping: total_accelの分散が非常に大きい、または平均が非常に大きい
+        else if (current_total_accel_var > 0.6 || current_total_accel_avg > 2.0 ) {
+            classificationResult = "jumping";
+        }
+        // Walking: standingとjumpingの中間の動き
+        else if (current_total_accel_avg >= 0.98 && current_total_accel_avg < 2.0 &&
+                 current_total_accel_var >= 0.05 && current_total_accel_var < 0.6) {
+            classificationResult = "walking";
+        }
+        // 上記のどの条件にも当てはまらない場合
+        else {
+            classificationResult = "unknown (adjust rules)";
+        }
+        // --- 分類ロジックの調整ここまで ---
+    }
+    $('#classification-result').text(classificationResult);
+
+    const e_time = new Date();
+    // CSVデータ行の追加
+    const csv_line = e_time.getTime() + "," +
+                     "acc ," +
+                     currentX.toFixed(3) + "," +
+                     currentY.toFixed(3) + "," +
+                     currentZ.toFixed(3) + "," +
+                     totalAccel.toFixed(3) + "," +
+                     classificationResult + "\n";
+    $('#acc-csv').append(csv_line);
+}
+
+////////////////////////////////////////////////////////////////////
+// CSVダウンロード関数
+////////////////////////////////////////////////////////////////////
+function downloadCSV(filename, elementId) {
+    const csvContent = document.getElementById(elementId).value;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+
+    const link = document.createElement("a");
+    if (link.download !== undefined) { // HTML5ダウンロード属性をサポートしているか
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden'; // リンクを非表示にする
+        document.body.appendChild(link);
+        link.click(); // クリックイベントをプログラムで発生させる
+        document.body.removeChild(link); // リンクを削除
+    } else {
+        // ダウンロード属性がサポートされていないブラウザへのフォールバック（例: ユーザーに内容をコピーさせるなど）
+        alert("お使いのブラウザはファイルダウンロードに対応していません。テキストエリアの内容をコピーしてください。");
+    }
+}
+
+</script>
+
 <br>
 <h1>レポート</h1>
 <p><b>氏名:</b> 都筑零</p>
@@ -98,3 +373,6 @@ walking         1         1        4
             <li><b>困難だった点:</b> 手動ルール調整の難しさ。デバイスセンサー特性とモデル訓練のギャップ。リアルタイム性と安定性のバランスを取る`ACCEL_BUFFER_SIZE`の調整。</li>
         </ul>
     </p>
+
+</body>
+</html>
