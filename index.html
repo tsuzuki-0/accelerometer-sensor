@@ -24,6 +24,9 @@
       <h3>合計加速度統計</h3>
         <p>合計 - 最大値: <span id="accel-total-max">0</span>, 最小値: <span id="accel-total-min">0</span>, 平均: <span id="accel-total-avg">0</span>, 分散: <span id="accel-total-var">0</span></p>
 
+      <h2>分類結果</h2>
+        <p>(3) Classification result Result: <span id="classification-result">null</span></p>
+
       <h2>加速度のCSVデータ</h2>
     <textarea id="acc-csv" style="width:300px;height:300px;"></textarea><br>
     <button onclick="downloadCSV('accel_data.csv', 'acc-csv');">CSVダウンロード</button>
@@ -56,6 +59,7 @@ function requestMotionPermission(){
                 accelZBuffer = [];
                 accelTotalBuffer = []; // 合計加速度バッファもクリア
                 $('#acc-csv').val(''); // CSV表示エリアもクリア
+                $('#classification-result').text('null'); // 分類結果も初期化
             } else {
                 // 許可を得られなかった場合などの処理
                 console.log("許可が得られませんでした！");
@@ -73,6 +77,7 @@ function requestMotionPermission(){
         accelZBuffer = [];
         accelTotalBuffer = []; // 合計加速度バッファもクリア
         $('#acc-csv').val(''); // CSV表示エリアもクリア
+        $('#classification-result').text('null'); // 分類結果も初期化
     }
 }
 
@@ -152,7 +157,7 @@ function handleAcceleration(ev){
         Math.pow(ev.acceleration.y, 2) +
         Math.pow(ev.acceleration.z, 2)
     );
-    $('#accel-total').text(totalAccel.toFixed(3)); // ここは変更なし
+    $('#accel-total').text(totalAccel.toFixed(3));
 
     // 合計加速度をバッファに保存
     accelTotalBuffer.push(totalAccel);
@@ -164,6 +169,26 @@ function handleAcceleration(ev){
     $('#accel-total-min').text(statsTotal.min);
     $('#accel-total-avg').text(statsTotal.avg);
     $('#accel-total-var').text(statsTotal.var);
+
+    // --- ここから分類ロジックの追加 ---
+    // 仮の分類ロジック（実際にはここに深層学習や決定木モデルの推論ロジックが入ります）
+    let classificationResult = "null"; // デフォルト値
+
+    // 例: 合計加速度の平均値に基づいて簡易的に分類
+    // これはあくまで例であり、実際の深層学習モデルの動作とは異なります
+    if (accelTotalBuffer.length === ACCEL_BUFFER_SIZE) { // バッファが満たされたら分類を試みる
+        const currentAvgTotalAccel = statsTotal.avg;
+
+        if (currentAvgTotalAccel < 1.5) { // 静止していると仮定
+            classificationResult = "standing";
+        } else if (currentAvgTotalAccel >= 1.5 && currentAvgTotalAccel < 3.0) { // 歩いていると仮定
+            classificationResult = "walking";
+        } else { // ジャンプしていると仮定
+            classificationResult = "jumping";
+        }
+    }
+    $('#classification-result').text(classificationResult);
+    // --- 分類ロジックの追加ここまで ---
 
 
     var e_time = new Date();
