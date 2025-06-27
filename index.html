@@ -35,27 +35,15 @@
 <script type="text/javascript">
 alert("サンプルページ4へようこそ！");
 
-// 統計計算用の加速度データバッファ (3秒ウィンドウを模倣)
-// デバイスのセンサー更新頻度によるが、1秒間に約100ms（10回）と仮定すると、3秒で30サンプル程度。
-// 今回はACCEL_BUFFER_SIZEを調整し、リアルタイムでの統計計算に耐えうるように設定します。
-// より多くのサンプルで安定した統計量を出すため、大きめに設定。
-const ACCEL_BUFFER_SIZE = 50; // 直近の50サンプルで統計を計算（例: 0.5秒 - 1秒程度の窓）
-                               // 3秒窓なら、センサーの更新レートに応じて調整が必要。
-                               // (例: 100msごとに更新なら30サンプル、20msごとに更新なら150サンプル)
-                               // 今回はリアルタイム性も考慮して小さめにしています。
-                               // 安定した分類結果のためには、より大きなバッファサイズが必要です。
+const ACCEL_BUFFER_SIZE = 50;
 let accelXBuffer = [];
 let accelYBuffer = [];
 let accelZBuffer = [];
-let accelTotalBuffer = []; // 合計加速度用のバッファを追加
+let accelTotalBuffer = [];
 
-//////////////////////////////////////////////////////
-// ブラウザからセンサーアクセス許可を得る関数
-//////////////////////////////////////////////////////
 function requestMotionPermission(){
     if ( DeviceMotionEvent &&
           typeof DeviceMotionEvent.requestPermission === 'function' ){
-        // iOS 13+ の Safari
         DeviceMotionEvent.requestPermission().then(permissionState => {
             if (permissionState === 'granted') {
                 window.addEventListener("devicemotion", handleAcceleration, false);
@@ -66,7 +54,6 @@ function requestMotionPermission(){
             }
         }).catch(console.error)
     } else {
-        // その他のデバイス
         console.log("その他のデバイスを検出しました。リスナーを追加します...");
         window.addEventListener("devicemotion", handleAcceleration, false);
         resetUIAndBuffers();
@@ -78,13 +65,12 @@ function stopDeviceMotion(){
     console.log("センシングを停止しました。");
 }
 
-// UIとバッファをリセットするヘルパー関数
 function resetUIAndBuffers() {
     accelXBuffer = [];
     accelYBuffer = [];
     accelZBuffer = [];
     accelTotalBuffer = [];
-    $('#acc-csv').val('timestamp,type,x,y,z,total_accel,predicted_activity\n'); // ヘッダーを初期化
+    $('#acc-csv').val('timestamp,type,x,y,z,total_accel,predicted_activity\n');
     $('#classification-result').text('null');
     $('#accel-x-max').text(0); $('#accel-x-min').text(0); $('#accel-x-avg').text(0); $('#accel-x-var').text(0);
     $('#accel-y-max').text(0); $('#accel-y-min').text(0); $('#accel-y-avg').text(0); $('#accel-y-var').text(0);
@@ -94,9 +80,6 @@ function resetUIAndBuffers() {
 }
 
 
-////////////////////////////////////////////////////////////////////
-// 統計計算ヘルパー関数
-////////////////////////////////////////////////////////////////////
 function calculateStatistics(dataBuffer) {
     if (dataBuffer.length === 0) {
         return { max: 0, min: 0, avg: 0, var: 0 };
@@ -108,19 +91,10 @@ function calculateStatistics(dataBuffer) {
     const avg = sum / dataBuffer.length;
 
     // 分散を計算（標本分散 - NumPyのddof=1に相当）
+    // まず squaredDifferences を計算
     const squaredDifferences = dataBuffer.map(value => Math.pow(value - avg, 2));
-    const variance = squaredDifferences.reduce((a, b) => a + b, 0) / (dataBuffer.length - 1);
-    // データポイントが1つの場合、分散は定義されないので0とする
-    if (dataBuffer.length <= 1) {
-        return {
-            max: max.toFixed(3),
-            min: min.toFixed(3),
-            avg: avg.toFixed(3),
-            var: (0).toFixed(3) // 1点では分散0
-        };
-    }
-
-
+    const variance = dataBuffer.length > 1 ? squaredDifferences.reduce((a, b) => a + b, 0) / (dataBuffer.length - 1) : 0;
+    
     return {
         max: max.toFixed(3),
         min: min.toFixed(3),
@@ -130,10 +104,6 @@ function calculateStatistics(dataBuffer) {
 }
 
 
-////////////////////////////////////////////////////////////////////
-// 関数(1): 加速度データを処理する関数
-//  - この関数は1秒間に約10〜50回呼び出されます
-////////////////////////////////////////////////////////////////////
 function handleAcceleration(ev){
     const currentX = ev.acceleration.x;
     const currentY = ev.acceleration.y;
@@ -143,7 +113,6 @@ function handleAcceleration(ev){
     $('#accel-y').text( currentY.toFixed(3) );
     $('#accel-z').text( currentZ.toFixed(3) );
 
-    // 合計加速度を計算
     const totalAccel = Math.sqrt(
         Math.pow(currentX, 2) +
         Math.pow(currentY, 2) +
@@ -151,19 +120,16 @@ function handleAcceleration(ev){
     );
     $('#accel-total').text(totalAccel.toFixed(3));
 
-    // データをバッファに保存
     accelXBuffer.push(currentX);
     accelYBuffer.push(currentY);
     accelZBuffer.push(currentZ);
     accelTotalBuffer.push(totalAccel);
 
-    // バッファサイズを超えた場合、最も古いデータを削除
     if (accelXBuffer.length > ACCEL_BUFFER_SIZE) accelXBuffer.shift();
     if (accelYBuffer.length > ACCEL_BUFFER_SIZE) accelYBuffer.shift();
     if (accelZBuffer.length > ACCEL_BUFFER_SIZE) accelZBuffer.shift();
     if (accelTotalBuffer.length > ACCEL_BUFFER_SIZE) accelTotalBuffer.shift();
 
-    // X, Y, Z, 合計加速度の統計情報を計算
     const statsX = calculateStatistics(accelXBuffer);
     $('#accel-x-max').text(statsX.max);
     $('#accel-x-min').text(statsX.min);
@@ -188,10 +154,8 @@ function handleAcceleration(ev){
     $('#accel-total-avg').text(statsTotal.avg);
     $('#accel-total-var').text(statsTotal.var);
 
-    // --- ここから簡易分類ロジックの追加 ---
-    let classificationResult = "Waiting for data..."; // デフォルト値
+    let classificationResult = "Waiting for data...";
 
-    // バッファが十分に満たされてから分類を試みる
     if (accelTotalBuffer.length === ACCEL_BUFFER_SIZE) {
         const current_x_avg = parseFloat(statsX.avg);
         const current_y_avg = parseFloat(statsY.avg);
@@ -203,49 +167,37 @@ function handleAcceleration(ev){
         const current_z_var = parseFloat(statsZ.var);
 
 
-        // Pythonの決定木モデルの推論を模倣した簡易ルール
-        // これらの閾値は、あなたの訓練データと決定木の可視化結果を参考に調整してください。
-        // 例: 'standing' は total_accel_avg が低く、分散も低い傾向がある
-        // 'walking' は total_accel_avg が中程度で、y_avg が正の方向、分散もややある
-        // 'jumping' は total_accel_avg が高く、分散も大きい傾向がある
+        // --- 分類ロジックの調整 ---
+        // Pythonの決定木の可視化結果を参考に、より正確な分岐を試みます。
+        // 例えば、Pythonの決定木が `total_accel_var <= 0.2` で分岐し、
+        // その後 `y_avg <= 0.3` で分岐している、といった情報を活用します。
 
-        if (current_total_accel_avg < 0.95 && current_total_accel_var < 0.1) {
-            // total_accelの平均が低く、分散も低い場合
+        // standing (静止): total_accelの平均が低く、かつ分散も非常に低い
+        // Pythonの混同行列でstandingは完璧だったので、この条件は維持しつつ強化。
+        if (current_total_accel_avg < 0.98 && current_total_accel_var < 0.05) { // 閾値を少し厳しく調整
             classificationResult = "standing";
-        } else if (current_total_accel_var > 0.5 || current_y_var > 0.5 || current_x_var > 0.5 || current_z_var > 0.5) {
-            // いずれかの軸の分散が非常に大きい場合 (ジャンプは大きく動く)
+        }
+        // jumping (ジャンプ): total_accelの分散が非常に大きい、または平均が非常に大きい
+        // walkingと混同しやすいので、分散の閾値をより高くする、または他の特徴も組み合わせる
+        else if (current_total_accel_var > 0.6 || // 分散が非常に高い場合
+                 current_total_accel_avg > 2.0 ) { // 平均加速度も非常に高い場合
             classificationResult = "jumping";
-        } else if (current_total_accel_avg >= 0.95 && current_total_accel_avg < 1.5 && current_total_accel_var < 0.5) {
-            // total_accelの平均が中程度で、分散もそこまで高くない場合
+        }
+        // walking (歩行): standingよりは動きがあり、jumpingよりは激しくない
+        // total_accelの平均が中程度で、分散も中程度
+        // ここが一番トリッキーな部分。jumpingと重ならないように調整。
+        else if (current_total_accel_avg >= 0.98 && current_total_accel_avg < 2.0 && // total_accel平均がstandingとjumpingの間
+                 current_total_accel_var >= 0.05 && current_total_accel_var < 0.6) { // total_accel分散もstandingとjumpingの間
             classificationResult = "walking";
-        } else {
-            // 上記のいずれにも当てはまらない場合、再度ジャンプの可能性も
-            classificationResult = "unknown (try adjusting rules)";
         }
-
-        // さらに、y軸の平均は重力方向を示すため、通常は静止時に約9.8m/s^2 (約1G)
-        // デバイスの向きによってはYが負になることも考慮が必要。
-        // 今回のデータは標準化されていない生の加速度のようなので、0付近の重力除去された値か、重力込みの値かによる。
-        // データ収集時のy軸の傾向（standingのy_meanなど）を思い出すと良いです。
-        // 例：Yが大きくマイナスかプラスにブレるとジャンプや落下
-        // 今回の訓練データでのYの平均が0.4〜0.5程度なので、それを考慮。
-        if (classificationResult === "unknown (try adjusting rules)") {
-            if (current_total_accel_avg > 1.5) { // 高い合計加速度平均はジャンプの可能性
-                 classificationResult = "jumping";
-            }
+        else {
+            classificationResult = "unknown (adjust rules)";
         }
-
-        // ここはあくまで簡易ロジックであり、Pythonモデルの性能とは一致しません。
-        // 実際の決定木の可視化結果を参考に、条件をより厳密に記述できます。
-        // 例えば、特定の feature_name <= threshold の条件をたどる形で記述する。
+        // --- 分類ロジックの調整ここまで ---
     }
-
     $('#classification-result').text(classificationResult);
-    // --- 分類ロジックの追加ここまで ---
-
 
     var e_time = new Date();
-    // CSVにデータを追記 (現在の生の加速度と予測結果)
     const csv_line = e_time.getTime() + "," +
                      "acc ," +
                      currentX.toFixed(3) + "," +
@@ -256,9 +208,6 @@ function handleAcceleration(ev){
     $('#acc-csv').append(csv_line);
 }
 
-////////////////////////////////////////////////////////////////////
-// CSVダウンロード関数
-////////////////////////////////////////////////////////////////////
 function downloadCSV(filename, elementId) {
     const csvContent = document.getElementById(elementId).value;
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
