@@ -40,7 +40,7 @@
 
 <body>
 
-    <h1>acceleration data</h1>
+    <h1>Activity classification</h1>
     <button onclick="requestMotionPermission();">Get permission and start sensing</button>
     <button onclick="stopDeviceMotion();">Stop</button>
 
@@ -57,7 +57,7 @@
     <h2>Total Acceleration</h2>
     <p> Total Acceleration: <span id="accel-total">0</span> </p>
     <h3>Total Acceleration</h3>
-    <p>合計 - Max: <span id="accel-total-max">0</span>, Min: <span id="accel-total-min">0</span>, Average: <span id="accel-total-avg">0</span>, Variance: <span id="accel-total-var">0</span></p>
+    <p>Max: <span id="accel-total-max">0</span>, Min: <span id="accel-total-min">0</span>, Average: <span id="accel-total-avg">0</span>, Variance: <span id="accel-total-var">0</span></p>
 
     <h2>分類結果</h2>
     <p>Activity: <span id="classification-result">null</span></p>
@@ -121,8 +121,6 @@ function calculateStatistics(dataBuffer) {
     const min = Math.min(...dataBuffer);
     const sum = dataBuffer.reduce((a, b) => a + b, 0);
     const avg = sum / dataBuffer.length;
-
-    // 分散を計算（標本分散 - NumPyのddof=1に相当）
     const squaredDifferences = dataBuffer.map(value => Math.pow(value - avg, 2));
     const variance = dataBuffer.length > 1 ? squaredDifferences.reduce((a, b) => a + b, 0) / (dataBuffer.length - 1) : 0;
     
@@ -273,21 +271,20 @@ function downloadCSV(filename, elementId) {
     </p>
 
 <h2>特徴量</h2>
-    <p><b>選定した理由:</b>
-　　　生データのみではなく、Activityの特徴を決定づけるため、X, Y, Z軸および合計加速度の「最大値」「最小値」「平均値」「分散」を特徴量とした。
+    <p><b>選定した理由:</b>生データのみではなく、Activityの特徴を決定づけるため、X, Y, Z軸および合計加速度の「最大値」「最小値」「平均値」「分散」を特徴量とした。
     </p>
     <p><b>追加した特徴量について:</b>
-        各軸加速度（X, Y, Z）と合計加速度 (`total_accel`) について、それぞれ以下の統計量を追加した。
+        各軸加速度（X, Y, Z）と合計加速度 (total_accel) について、それぞれ以下の統計量を追加した。
         <ul>
-            <li>最大値 (`_max`)</li>
-            <li>最小値 (`_min`)</li>
-            <li>平均値 (`_mean`)</li>
-            <li>分散 (`_var`)</li>
+            <li>最大値 (max)</li>
+            <li>最小値 (min)</li>
+            <li>平均値 (mean)</li>
+            <li>分散 (var)</li>
         </ul>
 
 <h2>機械学習モデル</h2>
     <p><b>採用したアルゴリズムや学習結果の詳細:</b>
-        活動分類には<b>決定木分類器 (Decision Tree Classifier)</b> を採用。`scikit-learn` を使用し、データセット（60サンプル）を訓練70%（42サンプル）、テスト30%（18サンプル）に分割して訓練。
+        活動分類には<b>決定木分類器 (Decision Tree Classifier)</b> を採用。scikit-learn を使用し、データセット（60サンプル）を訓練70%（42サンプル）、テスト30%（18サンプル）に分割して訓練。
         <br>
         <b>学習結果（テストセット18サンプルでの評価）:</b>
         <ul>
@@ -312,7 +309,7 @@ jumping         5         0        1
 standing        0         6        0
 walking         1         1        4
         </pre>
-        全体精度は約83%。`standing` は完璧に分類。`walking` は`jumping`や`standing`と一部誤分類が見られた。
+        全体精度は約83%。standing は完璧に分類。walking はjumpingやstandingと一部誤分類が見られた。
 
 
 </body>
